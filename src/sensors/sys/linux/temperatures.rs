@@ -82,6 +82,16 @@ fn hwmon_sensor(input: PathBuf) -> Result<TemperatureSensor> {
 	})
 }
 
+fn coretemp() -> Vec<Result<TemperatureSensor>> {
+	glob("/sys/devices/platform/coretemp.*/hwmon/hwmon*/temp*_input")
+		.into_iter()
+		.map(|result| match result {
+			Ok(path) => hwmon_sensor(path),
+			Err(e) => Err(e),
+		})
+		.collect()
+}
+
 // https://github.com/shirou/gopsutil/blob/2cbc9195c892b304060269ef280375236d2fcac9/host/host_linux.go#L624
 fn hwmon() -> Vec<Result<TemperatureSensor>> {
 	let mut glob_results = glob("/sys/class/hwmon/hwmon*/temp*_input");
@@ -156,11 +166,16 @@ fn thermal_zone() -> Vec<Result<TemperatureSensor>> {
 }
 
 pub fn temperatures() -> Vec<Result<TemperatureSensor>> {
-	let hwmon = hwmon();
+	let coretemp = coretemp();
 
-	if hwmon.is_empty() {
-		thermal_zone()
+	if coretemp.is_empty() {
+		let hwmon = hwmon();
+		if hwmon.is_empty() {
+			thermal_zone()
+		} else {
+			hwmon
+		}
 	} else {
-		hwmon
+		coretemp
 	}
 }
